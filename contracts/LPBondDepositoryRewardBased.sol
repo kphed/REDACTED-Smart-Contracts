@@ -1,4 +1,6 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
+import 'hardhat/console.sol';
+
 pragma solidity 0.7.5;
 
 interface IOwnable {
@@ -728,6 +730,8 @@ interface ITreasury {
   function valueOf(address _token, uint256 _amount) external view returns (uint256 value_);
 
   function getFloor(address _token) external view returns (uint256);
+
+  function mintRewards(address _recipient, uint256 _amount) external;
 }
 
 interface IBondCalculator {
@@ -744,7 +748,7 @@ interface IStakingHelper {
   function stake(uint256 _amount, address _recipient) external;
 }
 
-contract REDACTEDLPBondDepository is Ownable {
+contract REDACTEDLPBondDepositoryRewardBased is Ownable {
   using FixedPoint for *;
   using SafeERC20 for IERC20;
   using SafeMath for uint256;
@@ -983,15 +987,12 @@ contract REDACTEDLPBondDepository is Ownable {
     uint256 tithePrincipal = _amount.mul(terms.tithe).div(100000);
 
     uint256 value = ITreasury(treasury).valueOf(principal, _amount);
+    console.log(' value = ', value);
     uint256 payout = payoutFor(value); // payout to bonder is computed
+    console.log('payout = ', payout);
 
     require(payout >= 10000000, 'Bond too small'); // must be > 0.01 BTRFLY ( underflow protection )
     require(payout <= maxPayout(), 'Bond too large'); // size protection because there is no slippage
-
-    // profits are calculated
-    uint256 titheBTRFLY = payout.mul(terms.tithe).div(100000);
-    uint256 fee = payout.mul(terms.fee).div(10000);
-    //    uint profit = value.sub( payout ).sub( fee );
 
     /**
             principal is transferred in
@@ -1002,11 +1003,16 @@ contract REDACTEDLPBondDepository is Ownable {
     IERC20(principal).safeTransfer(OLYMPUSTreasury, tithePrincipal);
 
     uint256 amountDeposit = _amount.sub(tithePrincipal);
+    IERC20(principal).safeTransfer(address(treasury), amountDeposit);
 
-    IERC20(principal).approve(address(treasury), amountDeposit);
-    //ITreasury(treasury).deposit(amountDeposit, principal, profit);
+    //call mintRewards
+    uint256 titheBTRFLY = payout.mul(terms.tithe).div(100000);
+    uint256 fee = payout.mul(terms.fee).div(10000);
+    uint256 totalMint = titheBTRFLY.add(fee).add(payout);
 
-    // fee is transferred to dao
+    ITreasury(treasury).mintRewards(address(this), totalMint);
+
+    // fee is transferred to daos
     IERC20(BTRFLY).safeTransfer(DAO, fee);
     IERC20(BTRFLY).safeTransfer(OLYMPUSTreasury, titheBTRFLY);
 

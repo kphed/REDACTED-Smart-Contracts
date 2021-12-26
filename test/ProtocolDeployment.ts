@@ -203,6 +203,8 @@ export const deployBond = async (
   )
 
   await bond.setStaking(staking, helper)
+
+  return bond
 }
 
 export const setUpXbtrfly = async (xbtrfly: XBTRFLY, staking: string, initialIndex: string) => {
