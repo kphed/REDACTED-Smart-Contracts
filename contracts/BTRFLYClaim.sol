@@ -583,9 +583,9 @@ interface ITreasury {
     function deposit( uint _amount, address _token, uint _profit ) external returns ( uint );
 }
 
-interface IwBTRFLY {
-    function sBTRFLYTowBTRFLY( uint amount ) external view returns ( uint );
-    function wBTRFLYTosBTRFLY( uint amount ) external view returns ( uint );
+interface IwxBTRFLY {
+    function wBTRFLYValue( uint amount ) external view returns ( uint );
+    function xBTRFLYValue( uint amount ) external view returns ( uint );
 }
 
 interface IStaking {
@@ -594,15 +594,17 @@ interface IStaking {
 }
 
 /**
- *  This contract allows Olympus seed investors and advisors to claim tokens.
- *  It has been revised to consider claims as staked immediately for accounting purposes.
+ *  This contract allows REDACTED OGs & investors to claim their BTRFLY (as wxBTRFLY)
+ *  A fork of Olympus's InvestorClaimV2
+ *
+ *  It considers claims as staked immediately for accounting purposes.
  *  This ensures that network ownership does not exceed disclosed levels.
  *  Claimants remain protected from network dilution that may arise, but claim and stake
  *  does not allow them to grow ownership beyond predefined levels. This change also penalizes
  *  sellers, since the tokens sold are still considered staked within this contract. This  
- *  step was taken to ensure fair distribution of exposure in the network.  
+ *  step was taken to ensure fair distribution of exposure in the network.
  */
-contract InvestorClaimV2 {
+contract BTRFLYClaim {
 
     /* ========== DEPENDENCIES ========== */
 
@@ -614,8 +616,8 @@ contract InvestorClaimV2 {
     /* ========== STRUCTS ========== */
 
     struct Term {
-        uint percent; // 4 decimals ( 5000 = 0.5% )
-        uint wClaimed; // rebase-agnostic number
+        uint billionths; // 1e9 = 1, 1e7 = 1%
+        uint wxClaimed; // rebase-agnostic number
         uint max; // maximum nominal BTRFLY amount can claim
     }
 
@@ -626,23 +628,17 @@ contract InvestorClaimV2 {
     address owner; // can set terms
     address newOwner; // push/pull model for changing ownership
     
-    IERC20 immutable BTRFLY; // claim token
+    IERC20 immutable BTRFLY; // BTRFLY token
     IERC20 immutable PRINCIPAL; // payment token
 
     ITreasury immutable treasury; // mints claim token
-    IStaking immutable staking; // stake BTRFLY for sBTRFLY
 
     address immutable DAO; // holds non-circulating supply
-    IwBTRFLY immutable wBTRFLY; // tracks rebase-agnostic balance
+    IwxBTRFLY immutable wxBTRFLY; // tracks rebase-agnostic balance | Claimants are paid in this
     
     mapping( address => Term ) public terms; // tracks address info
     
     mapping( address => address ) public walletChange; // facilitates address change
-
-    uint public totalAllocated; // as percent of supply (4 decimals: 10000 = 1%)
-    uint public maximumAllocated; // maximum portion of supply can allocate
-
-
 
     /* ========== CONSTRUCTOR ========== */
     
@@ -651,9 +647,7 @@ contract InvestorClaimV2 {
         address _principal, 
         address _treasury, 
         address _DAO, 
-        address _wBTRFLY, 
-        address _staking,
-        uint _maximumAllocated
+        address _wxBTRFLY
     ) {
         owner = msg.sender;
 
@@ -669,13 +663,12 @@ contract InvestorClaimV2 {
         require( _DAO != address(0) );
         DAO = _DAO;
 
-        require( _wBTRFLY != address(0) );
-        wBTRFLY = IwBTRFLY( _wBTRFLY );
+        require( _wxBTRFLY != address(0) );
+        wxBTRFLY = IwxBTRFLY( _wxBTRFLY );
         
         require( _staking != address(0) );
         staking = IStaking( _staking );
 
-        maximumAllocated = _maximumAllocated;
     }
 
 
@@ -686,44 +679,28 @@ contract InvestorClaimV2 {
      *  @notice allows wallet to claim BTRFLY
      *  @param _amount uint
      */
-    function claim( uint _amount ) external {
-        BTRFLY.safeTransfer( msg.sender, _claim( _amount ) ); // send claimed to sender
+    function claim( uint _amountPrincipal ) external {
+        uint toSendWrapped_ = wxBTRFLY.wrapFromBTRFLY(_claim( _amountPrincipal ));
+        IERC20(address(wxBTRFLY)).safeTransfer( msg.sender, toSendWrapped_ ); // send claimed to sender
     }
 
     /**
-     *  @notice allows wallet to claim BTRFLY and stake. 
-     *  @notice set _claim to true to receive sBTRFLY in wallet.
-     *  @param _amount uint
-     *  @param _claimsBTRFLY bool
-     */
-    function stake( uint _amount, bool _claimsBTRFLY ) external {
-        uint toStake = _claim( _amount ); // claim BTRFLY with PRINCIPAL
-
-        BTRFLY.approve( address( staking ), toStake );
-        staking.stake( toStake, msg.sender ); // stake BTRFLY for sender
-        
-        if ( _claimsBTRFLY ) {
-            staking.claim( msg.sender ); // claim sBTRFLY for sender
-        }
-    }
-
-    /**
-     *  @notice logic for claiming BTRFLY
-     *  @param _amount uint
+     *  @notice logic for claiming BTRFLY | _amount is in OHM terms, so 400x BTRFLY return
+     *  @param _amountPrincipal uint 
      *  @return ToSend_ uint
      */
-    function _claim( uint _amount ) internal returns ( uint ToSend_ ) {
-        PRINCIPAL.safeTransferFrom( msg.sender, address( this ), _amount ); // transfer PRINCIPAL payment in
+    function _claim( uint _amountPrincipal ) internal returns ( uint ToSend_ ) {
+        PRINCIPAL.safeTransferFrom( msg.sender, address( this ), _amountPrincipal ); // transfer PRINCIPAL payment in
         
-        PRINCIPAL.approve( address( treasury ), _amount ); // approve and
-        ToSend_ = treasury.deposit( _amount, address( PRINCIPAL ), 0 ); // deposit into treasury, receive BTRFLY
+        PRINCIPAL.approve( address( treasury ), _amountPrincipal ); // approve
+        ToSend_ = treasury.deposit( _amountPrincipal, address( PRINCIPAL ), 0 ); // deposit into treasury, receive BTRFLY
 
         // ensure claim is within bounds
-        require( claimableFor( msg.sender ).div( 1e9 ) >= ToSend_, 'Not enough vested' );
+        require( claimableFor( msg.sender ) >= ToSend_, 'Not enough vested' );
         require( terms[ msg.sender ].max.sub( claimed( msg.sender ) ) >= ToSend_, 'Claimed over max' );
 
         // add amount to tracked balance
-        terms[ msg.sender ].wClaimed = terms[ msg.sender ].wClaimed.add( wBTRFLY.sBTRFLYTowBTRFLY( ToSend_ ) );
+        terms[ msg.sender ].wxClaimed = terms[ msg.sender ].wxClaimed.add( wBTRFLY.wBTRFLYValue( ToSend_ ) );
     }
 
     /**
@@ -759,12 +736,12 @@ contract InvestorClaimV2 {
     function claimableFor( address _address ) public view returns (uint) {
         Term memory info = terms[ _address ];
 
-        uint max = circulatingSupply().mul( info.percent ).div( 1e6 );
+        uint max = circulatingSupply().mul( info.billionths ).div( 1e9 );
         if ( max > info.max ) {
             max = info.max;
         }
 
-        return max.sub( claimed( _address ) ).mul( 1e9 );
+        return max.sub( claimed( _address ) );
     }
 
     /**
@@ -773,7 +750,7 @@ contract InvestorClaimV2 {
      *  @return uint
      */
     function claimed( address _address ) public view returns ( uint ) {
-        return wBTRFLY.wBTRFLYTosBTRFLY( terms[ _address ].wClaimed );
+        return wBTRFLY.xBTRFLYValue( terms[ _address ].wxClaimed );
     }
 
     /**
@@ -799,18 +776,14 @@ contract InvestorClaimV2 {
      */
     function setTerms(address _address, uint _max, uint _rate, uint _hasClaimed ) external {
         require( msg.sender == owner, "Sender is not owner" );
-        require( _max >= terms[ _address ].max, "cannot lower amount claimable" );
-        require( _rate >= terms[ _address ].percent, "cannot lower vesting rate" );
-        require( totalAllocated.add( _rate ) <= maximumAllocated, "Cannot allocate more" );
 
         if( terms[ _address ].max == 0 ) {
-            terms[ _address ].wClaimed = wBTRFLY.sBTRFLYTowBTRFLY( _hasClaimed );
+            terms[ _address ].wxClaimed = wBTRFLY.sBTRFLYTowBTRFLY( _hasClaimed );
         } 
 
         terms[ _address ].max = _max;
         terms[ _address ].percent = _rate;
 
-        totalAllocated = totalAllocated.add( _rate );
     }
 
     /**
