@@ -329,4 +329,19 @@ contract Thecosomata is Ownable {
             ohmCap.sub(ohmLiquidity)
         );
     }
+
+    /**
+        @notice Withdraw tokens from Thecosomata (if any)
+        @param  token     address Token address
+        @param  amount    uint256 Token amount
+        @param  recipient address Account receiving tokens
+     */
+    function withdraw(
+        address token,
+        uint256 amount,
+        address recipient
+    ) external onlyOwner {
+        require(recipient != address(0), "Invalid recipient");
+        IERC20(token).transfer(recipient, amount);
+    }
 }

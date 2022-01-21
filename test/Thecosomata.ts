@@ -383,9 +383,7 @@ describe("Thecosomata", function () {
 
       expect(capacityBefore).to.equal(debtCapacity);
       expect(capacityAfter.eq(0)).to.equal(true);
-      expect(btrflyBurned.div(1e9).eq(1)).to.equal(
-        true
-      );
+      expect(btrflyBurned.div(1e9).eq(1)).to.equal(true);
       expect(ohmBalance.eq(0)).to.equal(true);
       expect(btrflyBalance.eq(0)).to.equal(true);
     });
@@ -420,6 +418,45 @@ describe("Thecosomata", function () {
       expect(debtCapacityBefore).to.equal(debtCapacityAfter);
       expect(capacityBefore.gt(capacityAfter)).to.equal(true);
       expect(btrflyBurned.eq(0)).to.equal(true);
+    });
+  });
+
+  describe("withdraw", () => {
+    it("Should withdraw tokens from Thecosomata", async () => {
+      const adminBalanceBeforeTransfer = await btrfly.balanceOf(admin.address);
+      const thecosomataBalanceBeforeTransfer = await btrfly.balanceOf(
+        thecosomata.address
+      );
+
+      const btrflyTransfer = 1e9;
+      await btrfly.transfer(thecosomata.address, btrflyTransfer);
+
+      const adminBalanceAfterTransfer = await btrfly.balanceOf(admin.address);
+      const thecosomataBalanceAfterTransfer = await btrfly.balanceOf(
+        thecosomata.address
+      );
+
+      await thecosomata.withdraw(btrfly.address, btrflyTransfer, admin.address);
+
+      const adminBalanceAfterWithdraw = await btrfly.balanceOf(admin.address);
+      const thecosomataBalanceAfterWithdraw = await btrfly.balanceOf(
+        thecosomata.address
+      );
+
+      expect(adminBalanceBeforeTransfer.eq(1e9)).to.equal(true);
+      expect(thecosomataBalanceBeforeTransfer.eq(0)).to.equal(true);
+      expect(adminBalanceAfterTransfer.eq(0)).to.equal(true);
+      expect(thecosomataBalanceAfterTransfer.eq(1e9)).to.equal(true);
+      expect(adminBalanceAfterWithdraw.eq(1e9)).to.equal(true);
+      expect(thecosomataBalanceAfterWithdraw.eq(0)).to.equal(true);
+    });
+
+    it("Should only be callable by the owner", async () => {
+      await expect(
+        thecosomata
+          .connect(simp)
+          .withdraw(btrfly.address, 1e9, simp.address)
+      ).to.be.revertedWith("Ownable: caller is not the owner");
     });
   });
 });
