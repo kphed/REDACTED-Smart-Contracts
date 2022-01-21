@@ -4,6 +4,7 @@ pragma solidity 0.7.5;
 import "hardhat/console.sol";
 import {UniswapV2Library} from "./library/UniswapV2Library.sol";
 import {IERC20} from "./interface/IERC20.sol";
+import {SafeERC20} from "./library/SafeERC20.sol";
 import {SafeMath} from "./library/SafeMath.sol";
 import {Ownable} from "./base/Ownable.sol";
 
@@ -152,7 +153,7 @@ contract Thecosomata is Ownable {
         @notice Called by Keeper for executing Thecosomata processes and provide liquidity
         @param  performdata    bytes Data which was passed back from the checkData simulation
      */
-    function performUpkeep(bytes calldata performdata) external {
+    function performUpkeep(bytes calldata performdata) external onlyOwner {
         bool shouldBorrow = abi.decode(performdata, (bool));
 
         addLiquidity(shouldBorrow);
