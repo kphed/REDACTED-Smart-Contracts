@@ -45,7 +45,7 @@ interface ISushiRouter {
 }
 
 interface ISushiFactory {
-    function getPair(address tokenA, address tokenB) external returns (address);
+    function getPair(address tokenA, address tokenB) external view returns (address);
 }
 
 interface IOlympusStaking {
@@ -223,6 +223,39 @@ contract Thecosomata is Ownable {
      */
     function incurOlympusDebt(uint256 amount) internal {
         IOlympusTreasury(OlympusTreasury).incurDebt(amount, OHM);
+    }
+
+    /**
+        @notice Calculate the minimum amount of LP token based on the current liquidity states
+        @return uint256 Minimum received lp token amount
+     */
+    function getMinimumLPAmount(bool shouldBorrow) external view returns (uint256) {
+        (uint256 ohmReserves, uint256 btrflyReserves) = UniswapV2Library
+            .getReserves(sushiFactory, OHM, BTRFLY);
+
+        uint256 btrfly = IBTRFLY(BTRFLY).balanceOf(address(this));
+        uint256 ohm = calculateAmountRequiredForLP(btrfly, true);
+
+        // The borrow or unstaking capacity
+        uint256 ohmCap = shouldBorrow
+            ? getRemainingDebtCapacity()
+            : getRemainingUnstakeableSOHM();
+        uint256 ohmLiquidity = ohmCap > ohm ? ohm : ohmCap;
+
+        // Use BTRFLY balance if remaining capacity is enough, otherwise, calculate BTRFLY amount
+        uint256 btrflyLiquidity = ohmCap > ohm
+            ? btrfly
+            : calculateAmountRequiredForLP(ohmLiquidity, false);
+
+        // Calculate and get the lower liquidity amount out of the 2 tokens
+        address pair = ISushiFactory(sushiFactory).getPair(OHM, BTRFLY);
+        uint256 ohmLpLiquidity = ohmLiquidity + IERC20(OHM).balanceOf(pair) - ohmReserves;
+        uint256 btrflyLpLiquidity = btrflyLiquidity + IERC20(BTRFLY).balanceOf(pair) - btrflyReserves;
+        uint256 slpTotalSupply = IERC20(pair).totalSupply();
+        uint256 liq1 = (ohmLpLiquidity * slpTotalSupply) / ohmReserves;
+        uint256 liq2 = (btrflyLpLiquidity * slpTotalSupply) / btrflyReserves;
+
+        return (liq1 < liq2 ? liq1 : liq2);
     }
 
     /**
