@@ -15,7 +15,7 @@ import {
 } from "../typechain";
 import { Result } from "ethers/lib/utils";
 
-describe("Thecosomata", function () {
+describe.only("Thecosomata", function () {
   let admin: SignerWithAddress;
   let simp: SignerWithAddress;
   let thecosomata: ThecosomataInternal;

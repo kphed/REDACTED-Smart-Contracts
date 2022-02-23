@@ -1,12 +1,11 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
-pragma solidity 0.7.5;
+pragma solidity ^0.8.0;
 
 import "hardhat/console.sol";
+import "@openzeppelin/contracts/access/Ownable.sol";
+import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
+import {SafeERC20} from "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
 import {UniswapV2Library} from "./library/UniswapV2Library.sol";
-import {IERC20} from "./interface/IERC20.sol";
-import {SafeERC20} from "./library/SafeERC20.sol";
-import {SafeMath} from "./library/SafeMath.sol";
-import {Ownable} from "./base/Ownable.sol";
 
 interface IBTRFLY is IERC20 {
     function burn(uint256 amount) external;
@@ -59,8 +58,6 @@ interface IOlympusStaking {
 }
 
 contract Thecosomata is Ownable {
-    using SafeMath for uint256;
-
     address public immutable BTRFLY;
     address public immutable sushiFactory;
     address public immutable OHM;
@@ -197,7 +194,7 @@ contract Thecosomata is Ownable {
             address(this)
         );
 
-        return debtLimit.sub(debtBalance);
+        return debtLimit - debtBalance;
     }
 
     /**
@@ -205,14 +202,12 @@ contract Thecosomata is Ownable {
         @return uint256 Unstakeable sOHM
      */
     function getRemainingUnstakeableSOHM() internal view returns (uint256) {
-        uint256 totalSOHM = IsOHM(sOHM).balanceOf(RedactedTreasury).add(
-            IsOHM(sOHM).balanceOf(address(this))
-        );
+        uint256 totalSOHM = IsOHM(sOHM).balanceOf(RedactedTreasury) +
+            IsOHM(sOHM).balanceOf(address(this));
         uint256 sOHMReservedForOlympus = IOlympusTreasury(OlympusTreasury)
-            .debtLimit(address(this))
-            .mul(2);
+            .debtLimit(address(this)) * 2;
 
-        return totalSOHM.sub(sOHMReservedForOlympus);
+        return totalSOHM - sOHMReservedForOlympus;
     }
 
     /**
@@ -259,12 +254,12 @@ contract Thecosomata is Ownable {
 
         if (debtFee > 0) {
             // Send Olympus fee in the form of LP tokens
-            olympusFee = slpMinted.mul(debtFee).div(1000000);
+            olympusFee = slpMinted * debtFee / 1000000;
 
             slpContract.transfer(OlympusTreasury, olympusFee);
         }
 
-        redactedDeposit = slpMinted.sub(olympusFee);
+        redactedDeposit = slpMinted - olympusFee;
 
         // Transfer LP token balance to Redacted treasury
         slpContract.transfer(RedactedTreasury, redactedDeposit);
@@ -327,7 +322,7 @@ contract Thecosomata is Ownable {
             btrflyLiquidity,
             unusedBTRFLY,
             ohmCap,
-            ohmCap.sub(ohmLiquidity)
+            ohmCap - ohmLiquidity
         );
     }
 
