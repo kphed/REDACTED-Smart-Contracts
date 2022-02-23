@@ -58,6 +58,8 @@ interface IOlympusStaking {
 }
 
 contract Thecosomata is Ownable {
+    using SafeERC20 for IERC20;
+
     address public immutable BTRFLY;
     address public immutable sushiFactory;
     address public immutable OHM;
@@ -289,13 +291,13 @@ contract Thecosomata is Ownable {
             // Send Olympus fee in the form of LP tokens
             olympusFee = slpMinted * debtFee / 1000000;
 
-            slpContract.transfer(OlympusTreasury, olympusFee);
+            slpContract.safeTransfer(OlympusTreasury, olympusFee);
         }
 
         redactedDeposit = slpMinted - olympusFee;
 
         // Transfer LP token balance to Redacted treasury
-        slpContract.transfer(RedactedTreasury, redactedDeposit);
+        slpContract.safeTransfer(RedactedTreasury, redactedDeposit);
 
         emit TransferLPTokens(olympusFee, redactedDeposit);
     }
@@ -371,6 +373,6 @@ contract Thecosomata is Ownable {
         address recipient
     ) external onlyOwner {
         require(recipient != address(0), "Invalid recipient");
-        IERC20(token).transfer(recipient, amount);
+        IERC20(token).safeTransfer(recipient, amount);
     }
 }
