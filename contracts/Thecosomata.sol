@@ -232,10 +232,13 @@ contract Thecosomata is Ownable {
         @return uint256 Minimum received lp token amount
      */
     function getMinimumLPAmount(bool shouldBorrow) external view returns (uint256) {
-        (uint256 ohmReserves, uint256 btrflyReserves) = UniswapV2Library
-            .getReserves(sushiFactory, OHM, BTRFLY);
+        address ohmAddress = OHM;
+        address btrflyAddress = BTRFLY;
 
-        uint256 btrfly = IBTRFLY(BTRFLY).balanceOf(address(this));
+        (uint256 ohmReserves, uint256 btrflyReserves) = UniswapV2Library
+            .getReserves(sushiFactory, ohmAddress, btrflyAddress);
+
+        uint256 btrfly = IBTRFLY(btrflyAddress).balanceOf(address(this));
         uint256 ohm = calculateAmountRequiredForLP(btrfly, true);
 
         // The borrow or unstaking capacity
@@ -250,9 +253,9 @@ contract Thecosomata is Ownable {
             : calculateAmountRequiredForLP(ohmLiquidity, false);
 
         // Calculate and get the lower liquidity amount out of the 2 tokens
-        address pair = ISushiFactory(sushiFactory).getPair(OHM, BTRFLY);
-        uint256 ohmLpLiquidity = ohmLiquidity + IERC20(OHM).balanceOf(pair) - ohmReserves;
-        uint256 btrflyLpLiquidity = btrflyLiquidity + IERC20(BTRFLY).balanceOf(pair) - btrflyReserves;
+        address pair = ISushiFactory(sushiFactory).getPair(ohmAddress, btrflyAddress);
+        uint256 ohmLpLiquidity = ohmLiquidity + IERC20(ohmAddress).balanceOf(pair) - ohmReserves;
+        uint256 btrflyLpLiquidity = btrflyLiquidity + IERC20(btrflyAddress).balanceOf(pair) - btrflyReserves;
         uint256 slpTotalSupply = IERC20(pair).totalSupply();
         uint256 liq1 = (ohmLpLiquidity * slpTotalSupply) / ohmReserves;
         uint256 liq2 = (btrflyLpLiquidity * slpTotalSupply) / btrflyReserves;
