@@ -47,7 +47,7 @@ contract ThecosomataInternal is Thecosomata {
         uint256 ohmAmount,
         uint256 btrflyAmount
     ) public {
-        return addOHMBTRFLYLiquiditySushiSwap(ohmAmount, btrflyAmount);
+        return addOHMBTRFLYLiquiditySushiSwap(ohmAmount, btrflyAmount, 0);
     }
 
     function _unstakeSOHM(uint256 amount) public {
@@ -63,6 +63,6 @@ contract ThecosomataInternal is Thecosomata {
     }
 
     function _addLiquidity(bool shouldBorrow) public {
-        return addLiquidity(shouldBorrow);
+        return addLiquidity(shouldBorrow, 0);
     }
 }

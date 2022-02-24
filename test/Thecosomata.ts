@@ -348,19 +348,37 @@ describe.only("Thecosomata", function () {
   });
 
   describe("performUpkeep", () => {
-    it("Should add liquidity using borrowed OHM if performUpkeep(true)", async () => {
+    it("Should not add liquidity if there's an issue with slippage", async () => {
       await btrfly.transfer(thecosomata.address, (1e9).toString());
 
+      const shouldBorrow = true;
+      // Use much higher minimum received to trigger invalid slippage error
+      const minimumReceived = (await thecosomata.getMinimumLPAmount(shouldBorrow)).mul(2);
+
+      await expect(
+        thecosomata.performUpkeep(
+          ethers.utils.defaultAbiCoder.encode(["bool", "uint256"], [shouldBorrow, minimumReceived])
+        )
+      ).to.be.revertedWith("Slippage");
+    });
+
+    it("Should add liquidity using borrowed OHM if performUpkeep(true)", async () => {
+      const shouldBorrow = true;
+      const minimumReceived = await thecosomata.getMinimumLPAmount(shouldBorrow);
+
       await thecosomata.performUpkeep(
-        ethers.utils.defaultAbiCoder.encode(["bool"], [true])
+        ethers.utils.defaultAbiCoder.encode(["bool", "uint256"], [shouldBorrow, minimumReceived])
       );
     });
 
     it("Should add liquidity using unstaked sOHM if performUpkeep(false)", async () => {
       await btrfly.transfer(thecosomata.address, (1e9).toString());
 
+      const shouldBorrow = false;
+      const minimumReceived = await thecosomata.getMinimumLPAmount(shouldBorrow);
+
       await thecosomata.performUpkeep(
-        ethers.utils.defaultAbiCoder.encode(["bool"], [false])
+        ethers.utils.defaultAbiCoder.encode(["bool", "uint256"], [shouldBorrow, minimumReceived])
       );
     });
   });

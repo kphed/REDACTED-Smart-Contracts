@@ -153,9 +153,9 @@ contract Thecosomata is Ownable {
         @param  performdata    bytes Data which was passed back from the checkData simulation
      */
     function performUpkeep(bytes calldata performdata) external onlyOwner {
-        bool shouldBorrow = abi.decode(performdata, (bool));
+        (bool shouldBorrow, uint256 minimumReceived) = abi.decode(performdata, (bool, uint256));
 
-        addLiquidity(shouldBorrow);
+        addLiquidity(shouldBorrow, minimumReceived);
     }
 
     /**
@@ -267,7 +267,8 @@ contract Thecosomata is Ownable {
      */
     function addOHMBTRFLYLiquiditySushiSwap(
         uint256 ohmAmount,
-        uint256 btrflyAmount
+        uint256 btrflyAmount,
+        uint256 minimumReceived
     ) internal {
         (, , uint256 slpMinted) = ISushiRouter(SushiRouter).addLiquidity(
             BTRFLY,
@@ -279,6 +280,8 @@ contract Thecosomata is Ownable {
             address(this), // Mint LP tokens directly to Redacted treasury
             block.timestamp + 5 minutes
         );
+
+        require(slpMinted >= minimumReceived, "Slippage");
 
         IERC20 slpContract = IERC20(
             ISushiFactory(sushiFactory).getPair(OHM, BTRFLY)
@@ -318,7 +321,7 @@ contract Thecosomata is Ownable {
         @notice Borrow from the Olympus Treasury and add liquidity
         @param  shouldBorrow bool Whether we should borrow or unstake
      */
-    function addLiquidity(bool shouldBorrow) internal {
+    function addLiquidity(bool shouldBorrow, uint256 minimumReceived) internal {
         uint256 btrfly = IBTRFLY(BTRFLY).balanceOf(address(this));
 
         // Amount of OHM we will withdraw and use as collateral or unstake if we have enough capacity
@@ -343,7 +346,7 @@ contract Thecosomata is Ownable {
             unstakeSOHM(ohmLiquidity);
         }
 
-        addOHMBTRFLYLiquiditySushiSwap(ohmLiquidity, btrflyLiquidity);
+        addOHMBTRFLYLiquiditySushiSwap(ohmLiquidity, btrflyLiquidity, minimumReceived);
 
         // Leftover BTRFLY that was not used (i.e. ohmCap > ohm)
         uint256 unusedBTRFLY = IBTRFLY(BTRFLY).balanceOf(address(this));
